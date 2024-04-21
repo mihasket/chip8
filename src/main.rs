@@ -32,6 +32,23 @@ struct Chip8 {
     key: [u8; 16],
 }
 
+impl Chip8 {
+    fn initialize() -> Chip8 {
+        Chip8 {
+            opcode: 0,
+            memory: [0; 4096],
+            cpu_register_v: [0; 15],
+            register_index: 0, 
+            pc: 512, 
+            gfx: [0; 64 * 32], 
+            delay_timer: 0,
+            sound_timer: 0, 
+            stack: Vec::new(),
+            key: [0; 16]
+        }
+    }
+}
+
 fn main() {
     println!("Hello, world!");
 }
