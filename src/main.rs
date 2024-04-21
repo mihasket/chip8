@@ -1,3 +1,5 @@
+use std::{fs::File, io::Read};
+
 const CHIP8_FONTSET: [u8; 80] =
 [
   0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -52,6 +54,25 @@ impl Chip8 {
         let mut i = 0;
         while i < 80 {
             self.memory[i] = CHIP8_FONTSET[i];
+            i += 1;
+        }
+    }
+
+    fn load_game(&mut self, file_name: &str) {
+        let file_result = File::open(file_name);
+
+        let mut file = match file_result {
+            Ok(file) => file,
+            Err(error) => panic!("Error opening file: {:?}", error)
+        };
+
+        let mut buffer = Vec::new();
+        let _ = file.read_to_end(&mut buffer);
+
+        let mut i = 0;
+        for byte in &buffer {
+            // Start reading to memory at position 0x200 which is 512
+            self.memory[i + 512] = *byte;
             i += 1;
         }
     }
