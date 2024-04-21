@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{env, fs::File, io::Read};
 
 const CHIP8_FONTSET: [u8; 80] =
 [
@@ -20,6 +20,8 @@ const CHIP8_FONTSET: [u8; 80] =
   0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 ];
 
+#[derive(Debug)]
+#[allow(dead_code)]
 struct Chip8 {
     opcode: u16,
     memory: [u8; 4096],
@@ -199,5 +201,11 @@ impl Chip8 {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let args: Vec<String> = env::args().collect();
+
+    let mut chip8 = Chip8::initialize();
+    chip8.load_fontset();
+    chip8.load_game(&args[1]);
+
+    chip8.cycle();
 }
