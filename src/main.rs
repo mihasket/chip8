@@ -47,6 +47,14 @@ impl Chip8 {
             key: [0; 16]
         }
     }
+
+    fn load_fontset(&mut self) {
+        let mut i = 0;
+        while i < 80 {
+            self.memory[i] = CHIP8_FONTSET[i];
+            i += 1;
+        }
+    }
 }
 
 fn main() {
