@@ -121,8 +121,6 @@ impl Chip8 {
             // 3xkk
             // Compares register Vx to kk, if equal => pc += 2
             0x3000 => {
-                println!("TODO");
-                
                 let x = (self.opcode & 0x0F00) as usize;
                 let kk = self.opcode & 0x00FF;
 
