@@ -86,8 +86,6 @@ impl Chip8 {
 
         self.opcode = 0x3AAA;
         println!("opcode: {:#06x}", self.opcode);
-        println!("opcode & 0xF000: {:#06x}", self.opcode & 0xF000);
-        println!("opcode & 0x000F: {:#06x}", self.opcode & 0x000F);
 
         match self.opcode & 0xF000 {
             // This is for 0x00e0 and 0x000e
@@ -121,9 +119,9 @@ impl Chip8 {
             // 3xkk
             // Compares register Vx to kk, if equal => pc += 2
             0x3000 => {
-                let x = (self.opcode & 0x0F00) as usize;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = self.opcode & 0x00FF;
-
+                
                 if u16::from(self.cpu_register_v[x]) == kk {
                     self.pc += 2;
                 }
