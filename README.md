@@ -9,7 +9,7 @@ The goal of this project is to get more familiar with Rust and emulation.
 
 ## Installation
 
-### 3. Download
+### 1. Download
 ```bash
 git clone https://github.com/mihasket/chip8 && cd chip8
 ```
