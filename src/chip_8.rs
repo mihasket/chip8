@@ -26,6 +26,7 @@ pub struct Chip8 {
     opcode: u16,
     memory: [u8; 4096],
     cpu_register_v: [u8; 16],
+    carry_register_vf: u8,
     register_index: u16,
     pc: u16,
     gfx: [u8; 64 * 32],
@@ -42,6 +43,7 @@ impl Chip8 {
             opcode: 0,
             memory: [0; 4096],
             cpu_register_v: [0; 16],
+            carry_register_vf: 0,
             register_index: 0, 
             pc: 512, 
             gfx: [0; 64 * 32], 
@@ -84,7 +86,7 @@ impl Chip8 {
             (self.memory[self.pc as usize] as u16) << 8 |
             self.memory[(self.pc + 1) as usize] as u16;
 
-        self.opcode = 0x3AAA;
+        self.opcode = 0x8bF6;
         println!("opcode: {:#06x}", self.opcode);
 
         match self.opcode & 0xF000 {
@@ -154,24 +156,105 @@ impl Chip8 {
 
                 // The cast might not work
                 self.cpu_register_v[x] = kk;
+                self.pc += 2;
             },
             // 7xkk
             // Sets register Vx = Vx + kk
             0x7000 => {
-                let x = (self.opcode & 0x0F00) as usize;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = (self.opcode & 0x00FF) as u8;
 
                 // The cast might not work
                 self.cpu_register_v[x] += kk;
+                self.pc += 2;
             },
             // 8xyz
-            // Sets register Vx = Vx + kk
             0x8000 => {
-                let x = (self.opcode & 0x0F00) as usize;
-                let kk = (self.opcode & 0x00FF) as u8;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
+                let y = ((self.opcode & 0x00F0) >> 4) as usize;
 
-                // The cast might not work
-                self.cpu_register_v[x] += kk;
+                match self.opcode & 0x000F {
+                    // Set Vx = Vx OR Vy
+                    0x0001 => {
+                        self.cpu_register_v[x] = self.cpu_register_v[x] | self.cpu_register_v[y];
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vx AND Vy.
+                    0x0002 => {
+                        self.cpu_register_v[x] = self.cpu_register_v[x] & self.cpu_register_v[y];
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vx XOR Vy.
+                    0x0003 => {
+                        self.cpu_register_v[x] = self.cpu_register_v[x] ^ self.cpu_register_v[y];
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vx + Vy, set VF = carry.
+                    0x0004 => {
+                        if self.cpu_register_v[x] + self.cpu_register_v[y] > 0 {
+                            self.carry_register_vf = 1;
+                        }
+                        else {
+                            self.carry_register_vf = 0;
+                        }
+
+                        self.cpu_register_v[x] = self.cpu_register_v[x] + self.cpu_register_v[y];
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vx - Vy, set VF = NOT borrow.
+                    0x0005 => {
+                        if self.cpu_register_v[x] > self.cpu_register_v[y] {
+                            self.carry_register_vf = 1;
+                        }
+                        else {
+                            self.carry_register_vf = 0;
+                        }
+
+                        self.cpu_register_v[x] = self.cpu_register_v[x] - self.cpu_register_v[y];
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vx SHR 1.
+                    0x0006 => {
+                        // Chip 8 is big endian
+                        if self.cpu_register_v[x] & 1 == 1 {
+                            self.carry_register_vf = 1;
+                        }
+                        else {
+                            self.carry_register_vf = 0;
+                        }
+
+                        self.cpu_register_v[x] >>= 1;
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vy - Vx, set VF = NOT borrow.
+                    0x0007 => {
+                        if self.cpu_register_v[y] > self.cpu_register_v[x] {
+                            self.carry_register_vf = 1;
+                        }
+                        else {
+                            self.carry_register_vf = 0;
+                        }
+
+                        self.cpu_register_v[x] = self.cpu_register_v[y] - self.cpu_register_v[x];
+                        self.pc += 2;
+                    },
+                    // Set Vx = Vx SHL 1.
+                    0x000E => {
+                        // Chip 8 is big endian
+                        if self.cpu_register_v[x] & 0b10000000 == 1 {
+                            self.carry_register_vf = 1;
+                        }
+                        else {
+                            self.carry_register_vf = 0;
+                        }
+
+                        self.cpu_register_v[x] <<= 1;
+                        self.pc += 2;
+                    },
+                    _ => {
+                        todo!()
+                    }
+                }
             },
             // ANNN: Register Index = NNN
             0xA000 => {
