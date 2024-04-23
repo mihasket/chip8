@@ -25,7 +25,7 @@ const CHIP8_FONTSET: [u8; 80] =
 pub struct Chip8 {
     opcode: u16,
     memory: [u8; 4096],
-    cpu_register_v: [u8; 15],
+    cpu_register_v: [u8; 16],
     register_index: u16,
     pc: u16,
     gfx: [u8; 64 * 32],
