@@ -41,7 +41,7 @@ impl Chip8 {
         Chip8 {
             opcode: 0,
             memory: [0; 4096],
-            cpu_register_v: [0; 15],
+            cpu_register_v: [0; 16],
             register_index: 0, 
             pc: 512, 
             gfx: [0; 64 * 32], 
