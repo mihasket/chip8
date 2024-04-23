@@ -119,7 +119,7 @@ impl Chip8 {
             // 3xkk
             // Compares register Vx to kk, if equal => pc += 2
             0x3000 => {
-                let x = (self.opcode & 0x0F00 >> 8) as usize;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = self.opcode & 0x00FF;
                 
                 if u16::from(self.cpu_register_v[x]) == kk {
@@ -129,7 +129,7 @@ impl Chip8 {
             // 4xkk
             // Compares register Vx to kk, if NOT equal => pc += 2
             0x4000 => {
-                let x = (self.opcode & 0x0F00 >> 8) as usize;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = self.opcode & 0x00FF;
 
                 if u16::from(self.cpu_register_v[x]) != kk {
@@ -139,7 +139,7 @@ impl Chip8 {
             // 5xy0
             // Compares register Vx with Vy, if equal => pc += 2
             0x5000 => {
-                let x = (self.opcode & 0x0F00 >> 8) as usize;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let y = (self.opcode & 0x00F0 >> 4) as usize;
 
                 if self.cpu_register_v[x] == self.cpu_register_v[y] {
@@ -149,7 +149,7 @@ impl Chip8 {
             // 6xkk
             // Sets register Vx to kk
             0x6000 => {
-                let x = (self.opcode & 0x0F00) as usize;
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = (self.opcode & 0x00FF) as u8;
 
                 // The cast might not work
