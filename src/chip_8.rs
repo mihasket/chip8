@@ -256,6 +256,15 @@ impl Chip8 {
                     }
                 }
             },
+            // 9xy0 - SNE Vx, Vy
+            0x9000 => {
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
+                let y = ((self.opcode & 0x00F0) >> 4) as usize;
+
+                if self.cpu_register_v[x] != self.cpu_register_v[y] {
+                    self.pc += 2;
+                }
+            }
             // ANNN: Register Index = NNN
             0xA000 => {
                 self.register_index = self.opcode & 0x0FFF;
