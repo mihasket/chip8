@@ -1,4 +1,5 @@
 use std::{fs::File, io::Read};
+use rand::Rng;
 
 const CHIP8_FONTSET: [u8; 80] =
 [
@@ -273,6 +274,13 @@ impl Chip8 {
             // BNNN: Jump to location nnn + V0.
             0xB000 => {
                 self.pc = (self.opcode & 0x0FFF) + (self.cpu_register_v[0] as u16);
+            },
+            // Cxkk: Set Vx = random byte & kk.
+            0xC000 => {
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
+                let kk = self.opcode & 0x00FF;
+                let random_number = rand::thread_rng().gen_range(0..=255);
+                self.cpu_register_v[x] = (random_number & kk) as u8;
             },
             _ => {
                 println!("No such opcode: {:#x}", self.opcode);
