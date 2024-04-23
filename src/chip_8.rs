@@ -270,6 +270,10 @@ impl Chip8 {
                 self.register_index = self.opcode & 0x0FFF;
                 self.pc += 2;
             },
+            // BNNN: Jump to location nnn + V0.
+            0xB000 => {
+                self.pc = (self.opcode & 0x0FFF) + (self.cpu_register_v[0] as u16);
+            },
             _ => {
                 println!("No such opcode: {:#x}", self.opcode);
             }
