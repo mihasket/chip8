@@ -329,8 +329,8 @@ impl Chip8 {
 
                         // Might need to check if program counter is out of range
                         // also cast
-                        for i in 0..=15 {
-                            self.memory[self.pc as usize] = self.cpu_register_v[i];
+                        for i in 0..=x {
+                            self.memory[self.register_index as usize + i] = self.cpu_register_v[i];
                         }
 
                         self.pc += 2;
