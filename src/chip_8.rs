@@ -307,6 +307,21 @@ impl Chip8 {
                         self.register_index += self.cpu_register_v[x] as u16;
                         self.pc += 2;
                     },
+                    // Store BCD representation of Vx in memory locations I, I+1, and I+2.
+                    0x0033 => {
+                        // The interpreter takes the decimal value of Vx,
+                        // places the hundreds digit in memory at location in I, 
+                        // the tens digit at location I+1, 
+                        // and the ones digit at location I+2.
+
+                        // Casting might not work!
+                        let decimal = self.cpu_register_v[x] as u16;
+                        self.memory[self.register_index as usize] = (decimal / 100) as u8;
+                        self.memory[(self.register_index + 1) as usize] = ((decimal / 10) % 10) as u8;
+                        self.memory[(self.register_index + 2) as usize] = ((decimal / 100) % 10) as u8;
+
+                        self.pc += 2;
+                    },
                     _ => {
                         todo!()
                     }
