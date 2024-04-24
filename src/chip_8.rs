@@ -282,6 +282,21 @@ impl Chip8 {
                 let random_number = rand::thread_rng().gen_range(0..=255);
                 self.cpu_register_v[x] = (random_number & kk) as u8;
             },
+            // FxZZ
+            0xF000 => {
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
+
+                match self.opcode & 0x00FF {
+                    // Set Vx = delay timer value.
+                    0x0007 => {
+                        self.cpu_register_v[x] = self.delay_timer; 
+                        self.pc += 2;
+                    },
+                    _ => {
+                        todo!()
+                    }
+                }
+            },
             _ => {
                 println!("No such opcode: {:#x}", self.opcode);
             }
