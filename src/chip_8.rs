@@ -296,7 +296,12 @@ impl Chip8 {
                     0x0015 => {
                         self.delay_timer = self.cpu_register_v[x]; 
                         self.pc += 2;
-                    }
+                    },
+                    // Set sound timer = Vx
+                    0x0018 => {
+                        self.sound_timer = self.cpu_register_v[x]; 
+                        self.pc += 2;
+                    },
                     _ => {
                         todo!()
                     }
