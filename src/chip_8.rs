@@ -87,7 +87,7 @@ impl Chip8 {
             (self.memory[self.pc as usize] as u16) << 8 |
             self.memory[(self.pc + 1) as usize] as u16;
 
-        self.opcode = 0x8bF6;
+        self.opcode = 0xF533;
         println!("opcode: {:#06x}", self.opcode);
 
         match self.opcode & 0xF000 {
@@ -253,7 +253,7 @@ impl Chip8 {
                         self.pc += 2;
                     },
                     _ => {
-                        todo!()
+                        println!("No such opcode: {:#x}", self.opcode);
                     }
                 }
             },
@@ -282,6 +282,26 @@ impl Chip8 {
                 let random_number = rand::thread_rng().gen_range(0..=255);
                 self.cpu_register_v[x] = (random_number & kk) as u8;
             },
+            // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+            0xD000 => {
+                println!("TODO");
+            },
+            0xE000 => {
+                let x = ((self.opcode & 0x0F00) >> 8) as usize;
+
+                match self.opcode & 0x00FF {
+                    // Skip next instruction if key with the value of Vx is pressed.
+                    0x009E => {
+                        println!("TODO");
+                    },
+                    0x00A1 => {
+                        println!("TODO");
+                    },
+                    _ => {
+                        println!("No such opcode: {:#x}", self.opcode);
+                    }
+                }
+            }
             // FxZZ
             0xF000 => {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
@@ -290,6 +310,11 @@ impl Chip8 {
                     // Set Vx = delay timer value.
                     0x0007 => {
                         self.cpu_register_v[x] = self.delay_timer; 
+                        self.pc += 2;
+                    },
+                    0x000A => {
+                        // Wait for a key press, store the value of the key in Vx.
+                        println!("TODO 0xFx0A");
                         self.pc += 2;
                     },
                     // Set delay timer = Vx
@@ -305,6 +330,11 @@ impl Chip8 {
                     // Set I = I + Vx
                     0x001E => {
                         self.register_index += self.cpu_register_v[x] as u16;
+                        self.pc += 2;
+                    },
+                    // Set I = location of sprite for digit Vx.
+                    0x0029 => {
+                        println!("TODO 0xFx29");
                         self.pc += 2;
                     },
                     // Store BCD representation of Vx in memory locations I, I+1, and I+2.
@@ -330,7 +360,7 @@ impl Chip8 {
                         // Might need to check if program counter is out of range
                         // also cast
                         for i in 0..=x {
-                            self.memory[self.register_index as usize + i] = self.cpu_register_v[i];
+                            self.memory[(self.register_index as usize) + i] = self.cpu_register_v[i];
                         }
 
                         self.pc += 2;
@@ -338,13 +368,13 @@ impl Chip8 {
                     // Read registers V0 through Vx from memory starting at location I.
                     0x0065 => {
                         for i in 0..=x {
-                            self.cpu_register_v[i] = self.memory[self.register_index as usize + i];
+                            self.cpu_register_v[i] = self.memory[(self.register_index as usize) + i];
                         }
 
                         self.pc += 2;
                     },
                     _ => {
-                        todo!()
+                        println!("No such opcode: {:#x}", self.opcode);
                     }
                 }
             },
