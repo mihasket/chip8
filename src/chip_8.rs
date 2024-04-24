@@ -302,6 +302,11 @@ impl Chip8 {
                         self.sound_timer = self.cpu_register_v[x]; 
                         self.pc += 2;
                     },
+                    // Set I = I + Vx
+                    0x001E => {
+                        self.register_index += self.cpu_register_v[x] as u16;
+                        self.pc += 2;
+                    },
                     _ => {
                         todo!()
                     }
