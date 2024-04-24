@@ -322,6 +322,19 @@ impl Chip8 {
 
                         self.pc += 2;
                     },
+                    // Store registers V0 through Vx in memory starting at location I.
+                    0x0055 => {
+                        // The interpreter copies the values of registers V0 through Vx into memory,
+                        // starting at the address in I.
+
+                        // Might need to check if program counter is out of range
+                        // also cast
+                        for i in 0..=15 {
+                            self.memory[self.pc as usize] = self.cpu_register_v[i];
+                        }
+
+                        self.pc += 2;
+                    },
                     _ => {
                         todo!()
                     }
