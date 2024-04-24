@@ -335,6 +335,14 @@ impl Chip8 {
 
                         self.pc += 2;
                     },
+                    // Read registers V0 through Vx from memory starting at location I.
+                    0x0065 => {
+                        for i in 0..=x {
+                            self.cpu_register_v[i] = self.memory[self.register_index as usize + i];
+                        }
+
+                        self.pc += 2;
+                    },
                     _ => {
                         todo!()
                     }
