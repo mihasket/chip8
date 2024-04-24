@@ -292,6 +292,11 @@ impl Chip8 {
                         self.cpu_register_v[x] = self.delay_timer; 
                         self.pc += 2;
                     },
+                    // Set delay timer = Vx
+                    0x0015 => {
+                        self.delay_timer = self.cpu_register_v[x]; 
+                        self.pc += 2;
+                    }
                     _ => {
                         todo!()
                     }
