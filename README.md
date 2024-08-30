@@ -1,6 +1,6 @@
 # Chip-8 Interpreter
 
-![](/Docs/pong.png)
+![](/docs/pong.png)
 
 A Chip-8 interpreter made in Rust.
 
