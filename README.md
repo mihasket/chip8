@@ -5,7 +5,7 @@ A work in progress Chip-8 interpreter made in Rust.
 The goal of this project is to get more familiar with Rust and emulation.
 
 ## Dependencies
-- [ggez](https://ggez.rs/) for rendering graphics and sound
+- [sdl2](https://docs.rs/sdl2/latest/sdl2/) for rendering graphics
 
 ## Installation
 
