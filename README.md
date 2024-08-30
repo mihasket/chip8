@@ -1,6 +1,8 @@
 # Chip-8 Interpreter
 
-A work in progress Chip-8 interpreter made in Rust.
+![](/Docs/pong.png)
+
+A Chip-8 interpreter made in Rust.
 
 The goal of this project is to get more familiar with Rust and emulation.
 
