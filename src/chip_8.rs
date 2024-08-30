@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, usize};
 use rand::Rng;
 
 const CHIP8_FONTSET: [u8; 80] =
@@ -21,21 +21,23 @@ const CHIP8_FONTSET: [u8; 80] =
   0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 ];
 
+pub const GAME_WIDTH: usize = 64;
+pub const GAME_HEIGHT: usize = 32;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Chip8 {
     opcode: u16,
     memory: [u8; 4096],
     cpu_register_v: [u8; 16],
-    carry_register_vf: u8,
+    screen: [bool; GAME_WIDTH * GAME_HEIGHT],
     register_index: u16,
     pc: u16,
-    gfx: [u8; 64 * 32],
     delay_timer: u8,
     sound_timer: u8,
-    // Stack includes stack pointer
-    stack: Vec<u16>,
-    key: [u8; 16],
+    stack_pointer: u16,
+    stack: [u16; 16],
+    keys: [bool; 16],
 }
 
 impl Chip8 {
@@ -43,16 +45,26 @@ impl Chip8 {
         Chip8 {
             opcode: 0,
             memory: [0; 4096],
+            screen: [false; GAME_WIDTH * GAME_HEIGHT],
             cpu_register_v: [0; 16],
-            carry_register_vf: 0,
             register_index: 0, 
             pc: 512, 
-            gfx: [0; 64 * 32], 
             delay_timer: 0,
             sound_timer: 0, 
-            stack: Vec::new(),
-            key: [0; 16]
+            stack_pointer: 0,
+            stack: [0; 16],
+            keys: [false; 16]
         }
+    }
+
+    fn push(&mut self, value: u16) {
+        self.stack[self.stack_pointer as usize] = value;
+        self.stack_pointer += 1;
+    }
+
+    fn pop(&mut self) -> u16 {
+        self.stack_pointer -= 1;
+        self.stack[self.stack_pointer as usize]
     }
 
     pub fn load_fontset(&mut self) {
@@ -61,6 +73,14 @@ impl Chip8 {
             self.memory[i] = CHIP8_FONTSET[i];
             i += 1;
         }
+    }
+
+    pub fn get_display(&self) -> &[bool] {
+        &self.screen
+    }
+
+    pub fn keypress(&mut self, i: usize, pressed: bool) {
+        self.keys[i] = pressed;
     }
 
     pub fn load_game(&mut self, file_name: &str) {
@@ -82,12 +102,27 @@ impl Chip8 {
         }
     }
 
+    pub fn cycle_timers(&mut self) {
+        // Update timers
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            if self.sound_timer == 1 {
+                println!("BEEP!");
+            }
+
+            self.sound_timer -= 1;
+        }
+    }
+
     pub fn cycle(&mut self) {
         self.opcode = 
             (self.memory[self.pc as usize] as u16) << 8 |
             self.memory[(self.pc + 1) as usize] as u16;
 
-        self.opcode = 0xF533;
+        self.pc += 2;
         println!("opcode: {:#06x}", self.opcode);
 
         match self.opcode & 0xF000 {
@@ -98,15 +133,18 @@ impl Chip8 {
                     // 0x00e0
                     0x0000 => {
                         // Clear the screen
-                        println!("Clear the screen");
+                        self.screen = [false; GAME_WIDTH * GAME_HEIGHT];
                     },
                     // 0x000e
                     0x000E => {
                         // Return from subroutine
-                        println!("Return from subroutine");
+                        // Subroutine is the same as jump, but expects to return
+                        let return_address = self.pop();
+                        self.pc = return_address;
                     },
                     _ => {
                         println!("No such opcode: {:#x}", self.opcode);
+                        return;
                     }
                 }
             },
@@ -116,16 +154,16 @@ impl Chip8 {
             },
             // Increment stack pointer, put current PC on top of stack. PC is set to NNN
             0x2000 => {
-                self.stack.push(self.pc);
+                self.push(self.pc);
                 self.pc = self.opcode & 0x0FFF;
             },
             // 3xkk
             // Compares register Vx to kk, if equal => pc += 2
             0x3000 => {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
-                let kk = self.opcode & 0x00FF;
+                let kk = (self.opcode & 0x00FF) as u8;
                 
-                if u16::from(self.cpu_register_v[x]) == kk {
+                if self.cpu_register_v[x] == kk {
                     self.pc += 2;
                 }
             },
@@ -133,9 +171,9 @@ impl Chip8 {
             // Compares register Vx to kk, if NOT equal => pc += 2
             0x4000 => {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
-                let kk = self.opcode & 0x00FF;
+                let kk = (self.opcode & 0x00FF) as u8;
 
-                if u16::from(self.cpu_register_v[x]) != kk {
+                if self.cpu_register_v[x] != kk {
                     self.pc += 2;
                 }
             },
@@ -155,9 +193,7 @@ impl Chip8 {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = (self.opcode & 0x00FF) as u8;
 
-                // The cast might not work
                 self.cpu_register_v[x] = kk;
-                self.pc += 2;
             },
             // 7xkk
             // Sets register Vx = Vx + kk
@@ -165,9 +201,8 @@ impl Chip8 {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = (self.opcode & 0x00FF) as u8;
 
-                // The cast might not work
-                self.cpu_register_v[x] += kk;
-                self.pc += 2;
+                // self.cpu_register_v[x] += kk;
+                self.cpu_register_v[x] = self.cpu_register_v[x].wrapping_add(kk);
             },
             // 8xyz
             0x8000 => {
@@ -178,82 +213,52 @@ impl Chip8 {
                     // Set Vx = Vx OR Vy
                     0x0001 => {
                         self.cpu_register_v[x] = self.cpu_register_v[x] | self.cpu_register_v[y];
-                        self.pc += 2;
                     },
                     // Set Vx = Vx AND Vy.
                     0x0002 => {
                         self.cpu_register_v[x] = self.cpu_register_v[x] & self.cpu_register_v[y];
-                        self.pc += 2;
                     },
                     // Set Vx = Vx XOR Vy.
                     0x0003 => {
                         self.cpu_register_v[x] = self.cpu_register_v[x] ^ self.cpu_register_v[y];
-                        self.pc += 2;
                     },
                     // Set Vx = Vx + Vy, set VF = carry.
                     0x0004 => {
-                        if self.cpu_register_v[x] + self.cpu_register_v[y] > 0 {
-                            self.carry_register_vf = 1;
-                        }
-                        else {
-                            self.carry_register_vf = 0;
-                        }
-
-                        self.cpu_register_v[x] = self.cpu_register_v[x] + self.cpu_register_v[y];
-                        self.pc += 2;
+                        let (new_vx, carry) = self.cpu_register_v[x].overflowing_add(self.cpu_register_v[y]);
+                        let new_vf = if carry { 1 } else { 0 };
+                        self.cpu_register_v[x] = new_vx;
+                        self.cpu_register_v[0xF] = new_vf;
                     },
                     // Set Vx = Vx - Vy, set VF = NOT borrow.
                     0x0005 => {
-                        if self.cpu_register_v[x] > self.cpu_register_v[y] {
-                            self.carry_register_vf = 1;
-                        }
-                        else {
-                            self.carry_register_vf = 0;
-                        }
-
-                        self.cpu_register_v[x] = self.cpu_register_v[x] - self.cpu_register_v[y];
-                        self.pc += 2;
+                        let (new_vx, carry) = self.cpu_register_v[x].overflowing_sub(self.cpu_register_v[y]);
+                        let new_vf = if carry { 1 } else { 0 };
+                        self.cpu_register_v[x] = new_vx;
+                        self.cpu_register_v[0xF] = new_vf;
                     },
                     // Set Vx = Vx SHR 1.
                     0x0006 => {
                         // Chip 8 is big endian
-                        if self.cpu_register_v[x] & 1 == 1 {
-                            self.carry_register_vf = 1;
-                        }
-                        else {
-                            self.carry_register_vf = 0;
-                        }
-
+                        self.cpu_register_v[0xF] = self.cpu_register_v[x] & 1;
                         self.cpu_register_v[x] >>= 1;
-                        self.pc += 2;
                     },
                     // Set Vx = Vy - Vx, set VF = NOT borrow.
                     0x0007 => {
-                        if self.cpu_register_v[y] > self.cpu_register_v[x] {
-                            self.carry_register_vf = 1;
-                        }
-                        else {
-                            self.carry_register_vf = 0;
-                        }
+                        let (new_vx, borrow) = self.cpu_register_v[y].overflowing_sub(self.cpu_register_v[x]);
+                        let new_vf = if borrow { 0 } else { 1 };
 
-                        self.cpu_register_v[x] = self.cpu_register_v[y] - self.cpu_register_v[x];
-                        self.pc += 2;
+                        self.cpu_register_v[x] = new_vx;
+                        self.cpu_register_v[0xF] = new_vf;
                     },
                     // Set Vx = Vx SHL 1.
                     0x000E => {
                         // Chip 8 is big endian
-                        if self.cpu_register_v[x] & 0b10000000 == 1 {
-                            self.carry_register_vf = 1;
-                        }
-                        else {
-                            self.carry_register_vf = 0;
-                        }
-
+                        self.cpu_register_v[0xF] = (self.cpu_register_v[x] >> 7) & 1;
                         self.cpu_register_v[x] <<= 1;
-                        self.pc += 2;
                     },
                     _ => {
                         println!("No such opcode: {:#x}", self.opcode);
+                        return;
                     }
                 }
             },
@@ -269,13 +274,13 @@ impl Chip8 {
             // ANNN: Register Index = NNN
             0xA000 => {
                 self.register_index = self.opcode & 0x0FFF;
-                self.pc += 2;
             },
             // BNNN: Jump to location nnn + V0.
             0xB000 => {
-                self.pc = (self.opcode & 0x0FFF) + (self.cpu_register_v[0] as u16);
+                self.pc = (self.cpu_register_v[0] as u16) + (self.opcode & 0x0FFF);
             },
             // Cxkk: Set Vx = random byte & kk.
+            // Might not work
             0xC000 => {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
                 let kk = self.opcode & 0x00FF;
@@ -283,19 +288,66 @@ impl Chip8 {
                 self.cpu_register_v[x] = (random_number & kk) as u8;
             },
             // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+            // Dxyn
             0xD000 => {
-                println!("TODO");
+                let digit2 = ((self.opcode & 0x0F00) >> 8) as usize;
+                let digit3 = ((self.opcode & 0x00F0) >> 4) as usize;
+
+                let x_coord = self.cpu_register_v[digit2] as u16;
+                let y_coord = self.cpu_register_v[digit3] as u16;
+
+                let n_bytes = self.opcode & 0x000F;
+                let mut flipped = false;
+
+                for i in 0..n_bytes {
+                    let addr = self.register_index + i as u16;
+                    let pixels = self.memory[addr as usize];
+
+                    // 8 bits long
+                    for j in 0..8 {
+                        if (pixels & (0b1000_0000 >> j)) != 0 {
+                            let x = (x_coord + j) as usize % GAME_WIDTH;
+                            let y = (y_coord + i) as usize % GAME_HEIGHT;
+
+                            let idx = x + GAME_WIDTH * y;
+
+                            flipped |= self.screen[idx];
+                            self.screen[idx] ^= true;
+                        }
+                    }
+                }
+
+                if flipped {
+                    self.cpu_register_v[0xF] = 1;
+                }
+                else {
+                    self.cpu_register_v[0xF] = 0;
+                }
             },
             0xE000 => {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
 
                 match self.opcode & 0x00FF {
                     // Skip next instruction if key with the value of Vx is pressed.
+                    // Checks the keyboard, and if the key corresponding to the value of Vx 
+                    // is currently in the down position, PC is increased by 2.
                     0x009E => {
-                        println!("TODO");
+                        let key = self.keys[self.cpu_register_v[x] as usize];
+
+                        if key {
+                            self.pc += 2;
+                        }
                     },
+                    // ExA1 - SKNP Vx
+                    // Skip next instruction if key with the value of Vx is not pressed.
+                    // Checks the keyboard, and if the key corresponding to the value of Vx 
+                    // is currently in the up position, PC is increased by 2.
                     0x00A1 => {
-                        println!("TODO");
+                        let key = self.keys[self.cpu_register_v[x] as usize];
+
+                        if !key {
+                            self.pc += 2;
+                        }
                     },
                     _ => {
                         println!("No such opcode: {:#x}", self.opcode);
@@ -310,32 +362,41 @@ impl Chip8 {
                     // Set Vx = delay timer value.
                     0x0007 => {
                         self.cpu_register_v[x] = self.delay_timer; 
-                        self.pc += 2;
                     },
+                    // Fx0A - LD Vx, K
+                    // Wait for a key press, store the value of the key in Vx.
+                    // All execution stops until a key is pressed, then the value of that key is stored in Vx.
                     0x000A => {
-                        // Wait for a key press, store the value of the key in Vx.
-                        println!("TODO 0xFx0A");
-                        self.pc += 2;
+                        let mut pressed = false;
+
+                        for i in 0..self.keys.len() {
+                            if self.keys[i] {
+                                self.cpu_register_v[x] = i as u8;
+                                pressed = true;
+                                break;
+                            }
+                        }
+
+                        if !pressed {
+                            self.pc += 2;
+                        }
                     },
                     // Set delay timer = Vx
                     0x0015 => {
                         self.delay_timer = self.cpu_register_v[x]; 
-                        self.pc += 2;
                     },
                     // Set sound timer = Vx
                     0x0018 => {
                         self.sound_timer = self.cpu_register_v[x]; 
-                        self.pc += 2;
                     },
                     // Set I = I + Vx
                     0x001E => {
                         self.register_index += self.cpu_register_v[x] as u16;
-                        self.pc += 2;
                     },
                     // Set I = location of sprite for digit Vx.
                     0x0029 => {
-                        println!("TODO 0xFx29");
-                        self.pc += 2;
+                        let font_sprite = self.cpu_register_v[x] as u16;
+                        self.register_index = font_sprite * 5;
                     },
                     // Store BCD representation of Vx in memory locations I, I+1, and I+2.
                     0x0033 => {
@@ -349,8 +410,6 @@ impl Chip8 {
                         self.memory[self.register_index as usize] = (decimal / 100) as u8;
                         self.memory[(self.register_index + 1) as usize] = ((decimal / 10) % 10) as u8;
                         self.memory[(self.register_index + 2) as usize] = ((decimal / 100) % 10) as u8;
-
-                        self.pc += 2;
                     },
                     // Store registers V0 through Vx in memory starting at location I.
                     0x0055 => {
@@ -362,38 +421,23 @@ impl Chip8 {
                         for i in 0..=x {
                             self.memory[(self.register_index as usize) + i] = self.cpu_register_v[i];
                         }
-
-                        self.pc += 2;
                     },
                     // Read registers V0 through Vx from memory starting at location I.
                     0x0065 => {
                         for i in 0..=x {
                             self.cpu_register_v[i] = self.memory[(self.register_index as usize) + i];
                         }
-
-                        self.pc += 2;
                     },
                     _ => {
                         println!("No such opcode: {:#x}", self.opcode);
+                        return;
                     }
                 }
             },
             _ => {
                 println!("No such opcode: {:#x}", self.opcode);
+                return;
             }
-        }
-
-        // Update timers
-        if self.delay_timer > 0 {
-            self.delay_timer -= 1;
-        }
-
-        if self.sound_timer > 0 {
-            if self.sound_timer == 1 {
-                println!("BEEP!");
-            }
-
-            self.sound_timer -= 1;
         }
     }
 }
