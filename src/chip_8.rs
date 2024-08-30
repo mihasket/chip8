@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, usize};
 use rand::Rng;
 
 const CHIP8_FONTSET: [u8; 80] =
@@ -27,15 +27,16 @@ pub struct Chip8 {
     opcode: u16,
     memory: [u8; 4096],
     cpu_register_v: [u8; 16],
+    screen: [bool; 64 * 32],
     carry_register_vf: u8,
     register_index: u16,
     pc: u16,
     gfx: [u8; 64 * 32],
     delay_timer: u8,
     sound_timer: u8,
-    // Stack includes stack pointer
-    stack: Vec<u16>,
-    key: [u8; 16],
+    stack_pointer: u16,
+    stack: [u16; 16],
+    keys: [bool; 16],
 }
 
 impl Chip8 {
@@ -43,6 +44,7 @@ impl Chip8 {
         Chip8 {
             opcode: 0,
             memory: [0; 4096],
+            screen: [false; 64 * 32],
             cpu_register_v: [0; 16],
             carry_register_vf: 0,
             register_index: 0, 
@@ -50,9 +52,20 @@ impl Chip8 {
             gfx: [0; 64 * 32], 
             delay_timer: 0,
             sound_timer: 0, 
-            stack: Vec::new(),
-            key: [0; 16]
+            stack_pointer: 0,
+            stack: [0; 16],
+            keys: [false; 16]
         }
+    }
+
+    fn push(&mut self, value: u16) {
+        self.stack[self.stack_pointer as usize] = value;
+        self.stack_pointer += 1;
+    }
+
+    fn pop(&mut self) -> u16 {
+        self.stack_pointer -= 1;
+        self.stack[self.stack_pointer as usize]
     }
 
     pub fn load_fontset(&mut self) {
@@ -87,7 +100,6 @@ impl Chip8 {
             (self.memory[self.pc as usize] as u16) << 8 |
             self.memory[(self.pc + 1) as usize] as u16;
 
-        self.opcode = 0xF533;
         println!("opcode: {:#06x}", self.opcode);
 
         match self.opcode & 0xF000 {
@@ -98,12 +110,14 @@ impl Chip8 {
                     // 0x00e0
                     0x0000 => {
                         // Clear the screen
-                        println!("Clear the screen");
+                        self.screen = [false; 64 * 32];
                     },
                     // 0x000e
                     0x000E => {
                         // Return from subroutine
-                        println!("Return from subroutine");
+                        // Subroutine is the same as jump, but expects to return
+                        let return_address = self.pop();
+                        self.pc = return_address;
                     },
                     _ => {
                         println!("No such opcode: {:#x}", self.opcode);
@@ -116,7 +130,7 @@ impl Chip8 {
             },
             // Increment stack pointer, put current PC on top of stack. PC is set to NNN
             0x2000 => {
-                self.stack.push(self.pc);
+                self.push(self.pc);
                 self.pc = self.opcode & 0x0FFF;
             },
             // 3xkk
@@ -283,19 +297,66 @@ impl Chip8 {
                 self.cpu_register_v[x] = (random_number & kk) as u8;
             },
             // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+            // Dxyn
             0xD000 => {
-                println!("TODO");
+                let digit2 = ((self.opcode & 0x0F00) >> 8) as usize;
+                let digit3 = ((self.opcode & 0x00F0) >> 4) as usize;
+
+                let x_coord = self.cpu_register_v[digit2] as u16;
+                let y_coord = self.cpu_register_v[digit3] as u16;
+
+                let n_bytes = self.opcode & 0x000F;
+                let mut flipped = false;
+
+                for i in 0..n_bytes {
+                    let addr = self.register_index + i as u16;
+                    let pixels = self.memory[addr as usize];
+
+                    // 8 bits long
+                    for j in 0..8 {
+                        if (pixels & (0b1000_0000 >> j)) != 0 {
+                            let x = (x_coord + j) as usize % 64;
+                            let y = (y_coord + i) as usize % 32;
+
+                            let idx = x + 64 * y;
+
+                            flipped |= self.screen[idx];
+                            self.screen[idx] ^= true;
+                        }
+                    }
+                }
+
+                if flipped {
+                    self.carry_register_vf = 1;
+                }
+                else {
+                    self.carry_register_vf = 0;
+                }
             },
             0xE000 => {
                 let x = ((self.opcode & 0x0F00) >> 8) as usize;
 
                 match self.opcode & 0x00FF {
                     // Skip next instruction if key with the value of Vx is pressed.
+                    // Checks the keyboard, and if the key corresponding to the value of Vx 
+                    // is currently in the down position, PC is increased by 2.
                     0x009E => {
-                        println!("TODO");
+                        let key = self.keys[self.cpu_register_v[x] as usize];
+
+                        if key {
+                            self.pc += 2;
+                        }
                     },
+                    // ExA1 - SKNP Vx
+                    // Skip next instruction if key with the value of Vx is not pressed.
+                    // Checks the keyboard, and if the key corresponding to the value of Vx 
+                    // is currently in the up position, PC is increased by 2.
                     0x00A1 => {
-                        println!("TODO");
+                        let key = self.keys[self.cpu_register_v[x] as usize];
+
+                        if !key {
+                            self.pc += 2;
+                        }
                     },
                     _ => {
                         println!("No such opcode: {:#x}", self.opcode);
@@ -312,10 +373,23 @@ impl Chip8 {
                         self.cpu_register_v[x] = self.delay_timer; 
                         self.pc += 2;
                     },
+                    // Fx0A - LD Vx, K
+                    // Wait for a key press, store the value of the key in Vx.
+                    // All execution stops until a key is pressed, then the value of that key is stored in Vx.
                     0x000A => {
-                        // Wait for a key press, store the value of the key in Vx.
-                        println!("TODO 0xFx0A");
-                        self.pc += 2;
+                        let mut pressed = false;
+
+                        for i in 0..self.keys.len() {
+                            if self.keys[i] {
+                                self.cpu_register_v[x] = i as u8;
+                                pressed = true;
+                                break;
+                            }
+                        }
+
+                        if !pressed {
+                            self.pc += 2;
+                        }
                     },
                     // Set delay timer = Vx
                     0x0015 => {
@@ -334,7 +408,9 @@ impl Chip8 {
                     },
                     // Set I = location of sprite for digit Vx.
                     0x0029 => {
-                        println!("TODO 0xFx29");
+                        let font_sprite = self.cpu_register_v[x] as u16;
+                        self.register_index = font_sprite * 5;
+
                         self.pc += 2;
                     },
                     // Store BCD representation of Vx in memory locations I, I+1, and I+2.
